@@ -3,6 +3,7 @@ import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import LoginModal from '../../components/LoginModal'
+import { useAuth } from '../../context/AuthContext'
 
 const tags = ['Product Strategy', 'B2B SaaS', 'Career Growth', 'Leadership']
 
@@ -40,15 +41,11 @@ export default function ProfilePage() {
   const router = useRouter()
   const { agent_id } = router.query
 
+  const { user, logout } = useAuth()
   const [isLoginOpen, setIsLoginOpen] = useState(false)
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-
-  const handleLogin = () => {
-    setIsLoggedIn(true)
-  }
 
   const handleLogout = () => {
-    setIsLoggedIn(false)
+    logout()
   }
 
   const chatBasePath = agent_id ? `/profile/${agent_id}/chat` : '/profile/alex-johnson/chat'
@@ -78,7 +75,7 @@ export default function ProfilePage() {
               </nav>
             </div>
             <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-              {isLoggedIn ? (
+              {user ? (
                 <button
                   onClick={handleLogout}
                   className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
@@ -367,7 +364,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} onLogin={handleLogin} />
+        <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
       </main>
     </>
   )

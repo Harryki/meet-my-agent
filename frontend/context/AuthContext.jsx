@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { getCurrentUserEmail, findUser, login, signup, logout } from '../lib/auth';
+import { apiRequest, getTokens, setTokens, clearTokens, getApiBaseUrl } from '../lib/api';
 
 const AuthContext = createContext(null);
 
@@ -8,34 +8,91 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const email = getCurrentUserEmail();
-    if (email) {
-      const found = findUser(email);
-      if (found) {
-        setUser({ email: found.email });
+    const initAuth = async () => {
+      const tokens = getTokens();
+      if (tokens?.accessToken) {
+        await fetchMe();
       }
-    }
-    setLoading(false);
+      setLoading(false);
+    };
+
+    initAuth();
   }, []);
 
-  const handleLogin = (email, password) => {
-    const result = login(email, password);
-    if (result.success) {
-      setUser(result.user);
+  const fetchMe = async () => {
+    try {
+      const response = await apiRequest('/v1/auth/me');
+      if (response.ok) {
+        const userData = await response.json();
+        setUser(userData);
+        return userData;
+      }
+      clearTokens();
+      setUser(null);
+      return null;
+    } catch {
+      clearTokens();
+      setUser(null);
+      return null;
     }
-    return result;
   };
 
-  const handleSignup = (email, password) => {
-    const result = signup(email, password);
-    if (result.success) {
-      setUser(result.user);
+  const handleAuthCode = async (code) => {
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/v1/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+
+      if (response.status === 401) {
+        const registerResponse = await fetch(`${getApiBaseUrl()}/v1/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        });
+
+        if (!registerResponse.ok) {
+          const error = await registerResponse.json().catch(() => ({}));
+          throw new Error(error.detail || '회원가입에 실패했습니다.');
+        }
+
+        const registerData = await registerResponse.json();
+        setTokens(registerData.access_token, registerData.refresh_token);
+        await fetchMe();
+        return { success: true };
+      }
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.detail || '로그인에 실패했습니다.');
+      }
+
+      const data = await response.json();
+      setTokens(data.access_token, data.refresh_token);
+      await fetchMe();
+      return { success: true };
+    } catch (error) {
+      clearTokens();
+      setUser(null);
+      return { success: false, error: error.message };
     }
-    return result;
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    const tokens = getTokens();
+    if (tokens?.refreshToken) {
+      try {
+        await fetch(`${getApiBaseUrl()}/v1/auth/logout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: tokens.refreshToken }),
+        });
+      } catch {
+        // ignore logout API errors
+      }
+    }
+    clearTokens();
     setUser(null);
   };
 
@@ -44,9 +101,9 @@ export function AuthProvider({ children }) {
       value={{
         user,
         loading,
-        login: handleLogin,
-        signup: handleSignup,
+        loginWithCode: handleAuthCode,
         logout: handleLogout,
+        refetchUser: fetchMe,
       }}
     >
       {children}

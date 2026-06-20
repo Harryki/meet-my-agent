@@ -1,157 +1,42 @@
-import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { buildGoogleAuthUrl } from '../lib/api';
 
 export default function AuthPage() {
-  const { login, signup } = useAuth();
-  const [mode, setMode] = useState('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
-
-  const resetForm = () => {
-    setEmail('');
-    setPassword('');
-    setConfirm('');
-    setError('');
-    setMessage('');
-  };
-
-  const toggleMode = () => {
-    setMode((prev) => (prev === 'login' ? 'signup' : 'login'));
-    resetForm();
-  };
-
-  const validate = () => {
-    if (!email.trim() || !password.trim()) {
-      return '이메일과 비밀번호를 입력해주세요.';
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return '올바른 이메일 형식을 입력해주세요.';
-    }
-    if (password.length < 4) {
-      return '비밀번호는 4자 이상이어야 합니다.';
-    }
-    if (mode === 'signup' && password !== confirm) {
-      return '비밀번호가 일치하지 않습니다.';
-    }
-    return '';
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setError('');
-    setMessage('');
-
-    const validationError = validate();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
-    if (mode === 'login') {
-      const result = login(email, password);
-      if (!result.success) {
-        setError(result.error);
-      }
-    } else {
-      const result = signup(email, password);
-      if (!result.success) {
-        setError(result.error);
-      } else {
-        setMessage('회원가입이 완료되었습니다.');
-      }
-    }
+  const handleGoogleLogin = () => {
+    window.location.href = buildGoogleAuthUrl();
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#fbfbfa] px-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Meet my agent</h1>
-        </div>
-
-        <h2 className="text-xl font-semibold text-gray-900 mb-1">
-          {mode === 'login' ? '로그인' : '회원가입'}
-        </h2>
-        <p className="text-sm text-gray-500 mb-6">
-          {mode === 'login'
-            ? ''
-            : '새 계정을 만들어 시작하세요.'}
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-center">
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Meet my agent</h1>
+        <p className="text-sm text-gray-500 mb-8">
+          Google 계정으로 간편하게 시작하세요.
         </p>
 
-        {error && (
-          <div className="mb-4 px-4 py-2 text-sm text-red-700 bg-red-50 rounded-lg">
-            {error}
-          </div>
-        )}
-        {message && (
-          <div className="mb-4 px-4 py-2 text-sm text-green-700 bg-green-50 rounded-lg">
-            {message}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              이메일
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@example.com"
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-400 transition-colors"
+        <button
+          onClick={handleGoogleLogin}
+          className="w-full flex items-center justify-center gap-3 py-2.5 px-4 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          <svg className="h-5 w-5" viewBox="0 0 24 24">
+            <path
+              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              fill="#4285F4"
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              비밀번호
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-400 transition-colors"
+            <path
+              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              fill="#34A853"
             />
-          </div>
-
-          {mode === 'signup' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                비밀번호 확인
-              </label>
-              <input
-                type="password"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-400 transition-colors"
-              />
-            </div>
-          )}
-
-          <button
-            type="submit"
-            className="w-full py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
-          >
-            {mode === 'login' ? '로그인' : '회원가입'}
-          </button>
-        </form>
-
-        <div className="mt-6 text-center text-sm text-gray-500">
-          {mode === 'login' ? '계정이 없으신가요?' : '이미 계정이 있으신가요?'}{' '}
-          <button
-            type="button"
-            onClick={toggleMode}
-            className="font-medium text-gray-900 underline underline-offset-2 hover:text-gray-700"
-          >
-            {mode === 'login' ? '회원가입' : '로그인'}
-          </button>
-        </div>
+            <path
+              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+              fill="#FBBC05"
+            />
+            <path
+              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+              fill="#EA4335"
+            />
+          </svg>
+          Google로 계속하기
+        </button>
       </div>
     </div>
   );
