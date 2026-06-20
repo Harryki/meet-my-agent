@@ -142,7 +142,7 @@ export default function ChatModal({ isOpen, onClose }) {
                 </svg>
               </div>
               <div>
-                <p className="font-semibold text-gray-900">Alex Kim</p>
+                <p className="font-semibold text-gray-900">Alex Johnson</p>
                 <p className="text-xs text-green-600">Google • AI 개발자</p>
               </div>
             </div>

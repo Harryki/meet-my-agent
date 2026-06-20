@@ -8,7 +8,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 
-const PROTOTYPE_AGENT_ID = 'alex-kim';
+const PROTOTYPE_AGENT_ID = 'alex-johnson';
 
 export default function Sidebar({
   open,
