@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { useAuth } from '../../context/AuthContext'
@@ -7,6 +7,7 @@ export default function AuthCallbackPage() {
   const router = useRouter()
   const { loginWithCode } = useAuth()
   const [error, setError] = useState(null)
+  const calledRef = useRef(false)
 
   useEffect(() => {
     if (!router.isReady) return
@@ -18,6 +19,9 @@ export default function AuthCallbackPage() {
       setError('인증 코드가 없습니다.')
       return
     }
+
+    if (calledRef.current) return
+    calledRef.current = true
 
     const handleCallback = async () => {
       const result = await loginWithCode(code)
