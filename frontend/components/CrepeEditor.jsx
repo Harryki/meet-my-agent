@@ -11,14 +11,17 @@ export default function CrepeEditor({ value = '', onChange }) {
   useEffect(() => {
     if (!containerRef.current) return;
 
-    let crepe;
     let active = true;
+    let creating = false;
+    let pendingDestroy = false;
 
     const init = async () => {
-      crepe = new Crepe({
+      const crepe = new Crepe({
         root: containerRef.current,
-        defaultValue: value,
+        defaultValue: value ?? '',
       });
+
+      crepeRef.current = crepe;
 
       if (onChange) {
         crepe.on((listener) => {
@@ -28,26 +31,42 @@ export default function CrepeEditor({ value = '', onChange }) {
         });
       }
 
-      if (!active) {
+      creating = true;
+      pendingDestroy = false;
+
+      try {
+        await crepe.create();
+      } catch (err) {
+        console.error('Crepe create error:', err);
+        throw err;
+      } finally {
+        creating = false;
+      }
+
+      if (!active || pendingDestroy) {
         crepe.destroy();
+        if (active) {
+          crepeRef.current = null;
+        }
         return;
       }
-      await crepe.create();
-      if (active) {
-        crepeRef.current = crepe;
-      } else {
-        crepe.destroy();
-      }
+
+      crepeRef.current = crepe;
     };
 
     init();
 
     return () => {
       active = false;
-      if (crepe) {
+      const crepe = crepeRef.current;
+      if (!crepe) return;
+
+      if (creating) {
+        pendingDestroy = true;
+      } else {
         crepe.destroy();
+        crepeRef.current = null;
       }
-      crepeRef.current = null;
     };
   }, [value, onChange]);
 

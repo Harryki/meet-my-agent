@@ -426,7 +426,7 @@ export default function Workspace() {
                     className="w-full text-4xl font-bold text-gray-900 placeholder-gray-300 focus:outline-none bg-transparent mb-6"
                   />
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 min-h-[60vh] p-6">
-                    {loadingFileId === activeFile.id ? (
+                    {activeFile.content === null || loadingFileId === activeFile.id ? (
                       <div className="flex items-center justify-center h-64 text-gray-400 gap-2">
                         <Loader2 size={18} className="animate-spin" />
                         파일 내용을 불러오는 중...

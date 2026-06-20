@@ -1,3 +1,5 @@
+from urllib.parse import quote
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,10 +43,18 @@ async def get_file(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     content = await file_service.storage.download(file_meta.storage_path)
+
+    original_name = file_meta.original_name
+    ascii_name = original_name.encode("latin-1", "ignore").decode("latin-1") or "file"
+    encoded_name = quote(original_name, safe="")
+    content_disposition = (
+        f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded_name}"
+    )
+
     return StreamingResponse(
         iter([content]),
         media_type=file_meta.mime_type or "application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{file_meta.original_name}"'},
+        headers={"Content-Disposition": content_disposition},
     )
 
 
