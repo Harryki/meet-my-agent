@@ -26,12 +26,13 @@ services:
     env_file:
       - ./backend/.env
     volumes:
+      - ./backend/app:/app/app
       - sqlite_data:/app/data
       - ./backend/storage/files:/app/data/storage/files
     depends_on:
       redis:
         condition: service_healthy
-    command: ["api"]
+    command: ["api-dev"]
 
   worker:
     build:
@@ -45,6 +46,8 @@ services:
     env_file:
       - ./backend/.env
     volumes:
+      - ./backend/app:/app/app
+      - ./backend/worker:/app/worker
       - sqlite_data:/app/data
       - ./backend/storage/files:/app/data/storage/files
     depends_on:
@@ -55,13 +58,24 @@ services:
   frontend:
     build:
       context: ./frontend
-      args:
-        - API_URL=http://app:8000
+      target: dev
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       - API_URL=http://app:8000
+      - WATCHPACK_POLLING=true
+    volumes:
+      - ./frontend/pages:/app/pages
+      - ./frontend/components:/app/components
+      - ./frontend/context:/app/context
+      - ./frontend/lib:/app/lib
+      - ./frontend/styles:/app/styles
+      - ./frontend/next.config.js:/app/next.config.js
+      - ./frontend/package.json:/app/package.json
+      - ./frontend/tailwind.config.js:/app/tailwind.config.js
+      - ./frontend/postcss.config.js:/app/postcss.config.js
+      - ./frontend/public:/app/public
     depends_on:
       - app
 
