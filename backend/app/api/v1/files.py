@@ -11,7 +11,7 @@ from app.services import file_service
 router = APIRouter(prefix="/files", tags=["files"])
 
 
-@router.get("/", response_model=list[FileResponse])
+@router.get("", response_model=list[FileResponse])
 async def list_files(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),

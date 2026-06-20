@@ -24,7 +24,7 @@ from app.schemas.chat import (
 router = APIRouter(prefix="/chats", tags=["chats"])
 
 
-@router.get("/", response_model=list[ChatResponse])
+@router.get("", response_model=list[ChatResponse])
 async def list_chats(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -48,7 +48,7 @@ async def list_chats(
     ]
 
 
-@router.post("/", response_model=ChatResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ChatResponse, status_code=status.HTTP_201_CREATED)
 async def create_chat(
     body: ChatCreateRequest,
     db: AsyncSession = Depends(get_db),

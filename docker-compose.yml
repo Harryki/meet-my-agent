@@ -50,6 +50,19 @@ services:
         condition: service_healthy
     command: ["worker"]
 
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - API_URL=http://app:8000
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - API_URL=http://app:8000
+    depends_on:
+      - app
+
 volumes:
   redis_data:
   sqlite_data:

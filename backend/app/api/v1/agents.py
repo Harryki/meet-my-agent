@@ -10,7 +10,7 @@ from app.services import agent_service
 router = APIRouter(prefix="/agents", tags=["agents"])
 
 
-@router.get("/", response_model=list[AgentResponse])
+@router.get("", response_model=list[AgentResponse])
 async def list_agents(db: AsyncSession = Depends(get_db)):
     agents = await agent_service.get_active_agents(db)
     return [
