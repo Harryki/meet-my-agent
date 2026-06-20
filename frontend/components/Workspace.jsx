@@ -248,7 +248,7 @@ export default function Workspace() {
   return (
     <>
       <Head>
-        <title>Knowledge Management</title>
+        <title>Meet my agent</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 

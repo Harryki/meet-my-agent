@@ -18,7 +18,7 @@ export default function KnowledgePage() {
     return (
       <>
         <Head>
-          <title>Knowledge Management</title>
+          <title>Meet my agent</title>
         </Head>
         <div className="min-h-screen flex items-center justify-center bg-[#fbfbfa]">
           <div className="text-gray-500">불러오는 중...</div>
@@ -30,7 +30,7 @@ export default function KnowledgePage() {
   return (
     <>
       <Head>
-        <title>Knowledge Management</title>
+        <title>Meet my agent</title>
       </Head>
       <Workspace />
     </>
