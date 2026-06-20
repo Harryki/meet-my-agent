@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import Head from 'next/head';
-import { Save, Trash2, Loader2 } from 'lucide-react';
+import { Pencil, Trash2, Save } from 'lucide-react';
 import Sidebar from './Sidebar';
 import DropOverlay from './DropOverlay';
-import UploadMenu from './UploadMenu';
+import TopNavbar from './TopNavbar';
 import { useAuth } from '../context/AuthContext';
 import {
   apiListFiles,
@@ -43,12 +43,25 @@ function textToFile(content, filename) {
   return new File([content], filename, { type: 'text/markdown' });
 }
 
+function countWords(text = '') {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function formatLastEdited(dateString) {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return `Last edited ${date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })}`;
+}
+
 export default function Workspace() {
   const { user, logout } = useAuth();
   const [files, setFiles] = useState([]);
   const [initialized, setInitialized] = useState(false);
   const [activeFileId, setActiveFileId] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftContent, setDraftContent] = useState('');
@@ -60,6 +73,7 @@ export default function Workspace() {
   const dragCounter = useRef(0);
   const fileInputRef = useRef(null);
   const folderInputRef = useRef(null);
+  const titleInputRef = useRef(null);
 
   const activeFile = files.find((f) => f.id === activeFileId) || null;
 
@@ -281,6 +295,15 @@ export default function Workspace() {
     }
   }, [activeFile, files]);
 
+  const handleEditNote = useCallback(() => {
+    titleInputRef.current?.focus();
+  }, []);
+
+  const wordCount = useMemo(
+    () => countWords(draftContent),
+    [draftContent]
+  );
+
   useEffect(() => {
     const onDragEnter = (e) => {
       e.preventDefault();
@@ -342,121 +365,123 @@ export default function Workspace() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
-      <div className="flex h-screen w-screen overflow-hidden bg-[#fbfbfa]">
-        <Sidebar
-          open={sidebarOpen}
-          onToggle={() => setSidebarOpen((v) => !v)}
-          files={files}
-          activeFileId={activeFileId}
-          onSelectFile={setActiveFileId}
-          onCreateFile={handleCreateFile}
-        />
+      <div className="h-screen flex flex-col bg-white overflow-hidden">
+        <TopNavbar userName={user?.name || 'Alex Johnson'} onLogout={logout} />
 
-        <main className="flex-1 flex flex-col min-w-0 h-full">
-          <header className="flex items-center justify-between h-12 px-4 border-b border-gray-200 bg-white/60 backdrop-blur-sm">
-            <div className="flex items-center gap-3 min-w-0">
-              <span className="text-sm text-gray-500 truncate">
-                {activeFile ? activeFile.path : '새 페이지'}
-              </span>
-              {saveStatus && (
-                <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-                  {saveStatus}
-                </span>
-              )}
-              {isLoadingList && (
-                <span className="text-xs text-gray-500 flex items-center gap-1">
-                  <Loader2 size={12} className="animate-spin" />
-                  파일 목록 로딩 중...
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              {activeFile && (
-                <>
-                  <button
-                    onClick={handleDelete}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                  >
-                    <Trash2 size={16} />
-                    삭제
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={!isDirty}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                      isDirty
-                        ? 'bg-gray-900 text-white hover:bg-gray-800'
-                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    }`}
-                  >
-                    <Save size={16} />
-                    저장
-                  </button>
-                </>
-              )}
-              <UploadMenu
-                onUploadFile={() => fileInputRef.current?.click()}
-                onUploadFolder={() => folderInputRef.current?.click()}
-                variant="secondary"
-              />
-              <button
-                onClick={logout}
-                className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
-              >
-                로그아웃
-              </button>
-            </div>
-          </header>
+        <div className="flex flex-1 overflow-hidden">
+          <Sidebar
+            files={files}
+            activeFileId={activeFileId}
+            onSelectFile={setActiveFileId}
+            onCreateFile={handleCreateFile}
+            onUploadFile={() => fileInputRef.current?.click()}
+          />
 
-          {error && (
-            <div className="px-4 py-2 bg-red-50 border-b border-red-100 text-sm text-red-700">
-              {error}
-            </div>
-          )}
-
-          <div className="flex-1 overflow-y-auto">
-            <div className="max-w-[900px] mx-auto w-full px-8 py-12">
-              {activeFile ? (
-                <>
-                  <input
-                    type="text"
-                    value={draftTitle}
-                    onChange={handleTitleChange}
-                    placeholder="제목 없음"
-                    className="w-full text-4xl font-bold text-gray-900 placeholder-gray-300 focus:outline-none bg-transparent mb-6"
-                  />
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 min-h-[60vh] p-6">
-                    {activeFile.content === null || loadingFileId === activeFile.id ? (
-                      <div className="flex items-center justify-center h-64 text-gray-400 gap-2">
-                        <Loader2 size={18} className="animate-spin" />
-                        파일 내용을 불러오는 중...
-                      </div>
-                    ) : (
-                      <CrepeEditor
-                        key={activeFile.id}
-                        value={activeFile.content}
-                        onChange={handleEditorChange}
-                      />
+          <main className="flex-1 flex flex-col min-w-0 bg-white">
+            {activeFile ? (
+              <>
+                <header className="flex items-center justify-between h-14 px-8 border-b border-gray-200 bg-white shrink-0">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-sm font-semibold text-gray-900 truncate">
+                      {activeFile.name}
+                    </span>
+                    {saveStatus && (
+                      <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                        {saveStatus}
+                      </span>
+                    )}
+                    {isLoadingList && (
+                      <span className="text-xs text-gray-500">로딩 중...</span>
                     )}
                   </div>
-                </>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-[70vh] text-center">
-                  <p className="text-gray-500 mb-8 max-w-md">
-                    마크다운 파일(.md, .markdown)이나 폴드를 드래그 앤 드롭하거나
-                    <br />
-                    업로드 버튼으로 선택하세요.
-                  </p>
-                  <UploadMenu
-                    onUploadFile={() => fileInputRef.current?.click()}
-                    onUploadFolder={() => folderInputRef.current?.click()}
-                    variant="primary"
-                  />
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={handleEditNote}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-md transition-colors"
+                    >
+                      <Pencil size={14} />
+                      Edit Note
+                    </button>
+                    <button
+                      onClick={handleDelete}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-md transition-colors"
+                    >
+                      <Trash2 size={14} />
+                      Delete Note
+                    </button>
+                    <button
+                      onClick={handleSave}
+                      disabled={!isDirty}
+                      className={`inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                        isDirty
+                          ? 'bg-blue-600 text-white hover:bg-blue-700'
+                          : 'bg-blue-600/50 text-white cursor-not-allowed'
+                      }`}
+                    >
+                      <Save size={14} />
+                      Save
+                    </button>
+                  </div>
+                </header>
+
+                {error && (
+                  <div className="px-8 py-2 bg-red-50 border-b border-red-100 text-sm text-red-700">
+                    {error}
+                  </div>
+                )}
+
+                <div className="flex-1 overflow-y-auto">
+                  <div className="max-w-3xl mx-auto px-8 py-10">
+                    <input
+                      ref={titleInputRef}
+                      type="text"
+                      value={draftTitle}
+                      onChange={handleTitleChange}
+                      placeholder="제목 없음"
+                      className="w-full text-3xl font-bold text-gray-900 placeholder-gray-300 focus:outline-none bg-transparent mb-3"
+                    />
+
+                    <div className="flex items-center gap-4 text-sm text-gray-400 mb-6">
+                      <span>{formatLastEdited(activeFile.createdAt)}</span>
+                      <span>{wordCount} words</span>
+                    </div>
+
+                    <hr className="border-gray-200 mb-8" />
+
+                    <div className="min-h-[50vh]">
+                      {activeFile.content === null || loadingFileId === activeFile.id ? (
+                        <div className="flex items-center justify-center h-64 text-gray-400">
+                          파일 내용을 불러오는 중...
+                        </div>
+                      ) : (
+                        <CrepeEditor
+                          key={activeFile.id}
+                          value={activeFile.content}
+                          onChange={handleEditorChange}
+                        />
+                      )}
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
-          </div>
-        </main>
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
+                <p className="text-gray-500 mb-6 max-w-md">
+                  마크다운 파일(.md, .markdown)을 드래그 앤 드롭하거나
+                  <br />
+                  사이드바의 업로드 버튼을 사용하세요.
+                </p>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 bg-white border border-blue-200 hover:bg-blue-50 rounded-md transition-colors"
+                >
+                  Upload File
+                </button>
+              </div>
+            )}
+          </main>
+        </div>
       </div>
 
       <DropOverlay visible={isDragging} />
