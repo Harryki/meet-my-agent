@@ -1,0 +1,56 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:////app/data/db.sqlite3
+      - REDIS_URL=redis://redis:6379/0
+      - STORAGE_LOCAL_BASE_PATH=/app/data/storage/files
+    env_file:
+      - ./backend/.env
+    volumes:
+      - sqlite_data:/app/data
+      - storage_files:/app/data/storage/files
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: ["api"]
+
+  worker:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:////app/data/db.sqlite3
+      - REDIS_URL=redis://redis:6379/0
+      - STORAGE_LOCAL_BASE_PATH=/app/data/storage/files
+    env_file:
+      - ./backend/.env
+    volumes:
+      - sqlite_data:/app/data
+      - storage_files:/app/data/storage/files
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: ["worker"]
+
+volumes:
+  redis_data:
+  sqlite_data:
+  storage_files:
