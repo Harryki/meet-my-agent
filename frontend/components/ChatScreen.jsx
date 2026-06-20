@@ -1,41 +1,9 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useAuth } from '../context/AuthContext'
-
-const initialMessages = [
-  {
-    id: 1,
-    sender: 'agent',
-    text: "Hi! I'm Alex. Great to connect with you here. What's on your mind today — feel free to share as much or as little context as you'd like to start.",
-  },
-  {
-    id: 2,
-    sender: 'user',
-    text: "Hey Alex! Thanks for making time. I'm currently an engineer at a Series B startup and I've been thinking seriously about transitioning into a PM role. I'm not sure where to start.",
-  },
-  {
-    id: 3,
-    sender: 'agent',
-    text: "That's a really common and exciting transition to think about. Engineers often make great PMs because of the technical credibility. Can I ask — what's drawing you toward the PM side? Is it the product strategy, the customer interaction, or something else?",
-  },
-  {
-    id: 4,
-    sender: 'user',
-    text: "Honestly, I think it's the strategy part. I find myself constantly thinking about why we're building certain features, not just how. I want more say in that direction.",
-  },
-  {
-    id: 5,
-    sender: 'agent',
-    text: "That's a strong signal. The 'why' instinct is core to good PM thinking. A few practical questions: have you had any informal PM-like responsibilities in your current role? Things like writing specs, talking to customers, or driving prioritization discussions?",
-  },
-  {
-    id: 6,
-    sender: 'user',
-    text: "A bit — I've written a couple of technical specs and sat in on user interviews. But nothing formal.",
-  },
-]
+import { apiRequest, getApiBaseUrl } from '../lib/api'
 
 const tips = [
   'Be specific about your situation',
@@ -43,13 +11,17 @@ const tips = [
   'Take notes on key insights',
 ]
 
-export default function ChatScreen({ agentName = 'Alex Johnson', agentRole = 'Senior PM @ Google' }) {
+export default function ChatScreen({ defaultAgentName = 'Agent', defaultAgentRole = 'AI Agent' }) {
   const router = useRouter()
-  const { agent_id } = router.query
+  const { agent_id, chat_id } = router.query
   const { user, logout } = useAuth()
 
-  const [messages, setMessages] = useState(initialMessages)
+  const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
+  const [agentDetails, setAgentDetails] = useState({ name: defaultAgentName, persona: defaultAgentRole })
+  const [isInitializing, setIsInitializing] = useState(true)
+  const [isWaiting, setIsWaiting] = useState(false)
+  
   const scrollRef = useRef(null)
 
   useEffect(() => {
@@ -58,20 +30,155 @@ export default function ChatScreen({ agentName = 'Alex Johnson', agentRole = 'Se
     }
   }, [messages])
 
-  const handleSend = () => {
+  useEffect(() => {
+    if (!agent_id) return
+    const fetchAgent = async () => {
+      try {
+        const res = await apiRequest(`/v1/agents/${agent_id}`)
+        if (res.ok) {
+          const data = await res.json()
+          setAgentDetails(data)
+        }
+      } catch (err) {
+        console.error('Failed to load agent', err)
+      }
+    }
+    fetchAgent()
+  }, [agent_id])
+
+  useEffect(() => {
+    if (!agent_id) return
+
+    const initChat = async () => {
+      if (!chat_id) {
+        try {
+          const res = await apiRequest('/v1/chats', {
+            method: 'POST',
+            body: JSON.stringify({ agent_uuid: agent_id })
+          })
+          if (res.ok) {
+            const data = await res.json()
+            router.replace(`/profile/${agent_id}/chat/${data.uuid}`)
+          }
+        } catch (err) {
+          console.error('Failed to create chat', err)
+        }
+      } else {
+        try {
+          const res = await apiRequest(`/v1/chats/${chat_id}`)
+          if (res.ok) {
+            const data = await res.json()
+            setMessages(data.map(m => ({
+              id: m.uuid,
+              sender: m.role === 'assistant' ? 'agent' : 'user',
+              text: m.content || '',
+              status: m.status
+            })))
+          }
+        } catch (err) {
+          console.error('Failed to load messages', err)
+        } finally {
+          setIsInitializing(false)
+        }
+      }
+    }
+    initChat()
+  }, [agent_id, chat_id, router])
+
+  const handleSend = async () => {
     const trimmed = input.trim()
-    if (!trimmed) return
+    if (!trimmed || !chat_id || isWaiting) return
 
-    const userMessage = { id: Date.now(), sender: 'user', text: trimmed }
-    setMessages((prev) => [...prev, userMessage])
+    const tempId = Date.now().toString()
+    setMessages((prev) => [...prev, { id: tempId, sender: 'user', text: trimmed, status: 'completed' }])
     setInput('')
+    setIsWaiting(true)
 
-    setTimeout(() => {
+    try {
+      const res = await apiRequest(`/v1/chats/${chat_id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ content: trimmed })
+      })
+      if (!res.ok) throw new Error('Failed to send message')
+      const data = await res.json()
+      const message_uuid = data.message_uuid
+
       setMessages((prev) => [
         ...prev,
-        { id: Date.now() + 1, sender: 'agent', text: 'Thanks for sharing that. Let me think about the best way to help you with this.' },
+        { id: message_uuid, sender: 'agent', text: '', status: 'pending' }
       ])
-    }, 800)
+
+      const baseUrl = getApiBaseUrl()
+      const token = localStorage.getItem('access_token')
+      const url = new URL(`${baseUrl}/v1/chats/${chat_id}/messages/${message_uuid}/stream`)
+      
+      // using EventSource requires sending token somehow, or using fetch for streaming
+      // fetch approach for SSE
+      const sseRes = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      const reader = sseRes.body.getReader()
+      const decoder = new TextDecoder()
+      let currentText = ''
+      let buffer = ''
+      
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() // Keep incomplete line in buffer
+        
+        for (let line of lines) {
+          line = line.replace(/\r$/, '')
+          if (line.startsWith('data: ')) {
+            const dataStr = line.slice(6)
+            if (!dataStr) continue
+            try {
+              const evtData = JSON.parse(dataStr)
+              if (evtData.type === 'token') {
+                currentText += evtData.token
+                setMessages((prev) => prev.map(m => m.id === message_uuid ? { ...m, text: currentText } : m))
+              } else if (evtData.type === 'tool_call') {
+                setMessages((prev) => prev.map(m => {
+                  if (m.id !== message_uuid) return m;
+                  const newTools = [...(m.tools || [])];
+                  newTools.push({ name: evtData.tool, args: evtData.arguments, status: 'searching' });
+                  return { ...m, tools: newTools };
+                }))
+              } else if (evtData.type === 'tool_result') {
+                setMessages((prev) => prev.map(m => {
+                  if (m.id !== message_uuid) return m;
+                  const newTools = [...(m.tools || [])];
+                  if (newTools.length > 0) {
+                    newTools[newTools.length - 1] = { 
+                      ...newTools[newTools.length - 1], 
+                      status: 'done',
+                      result: evtData.chunks_count > 0 
+                        ? `Found ${evtData.chunks_count} relevant chunks in ${evtData.files.join(', ')}`
+                        : 'No relevant info found'
+                    };
+                  }
+                  return { ...m, tools: newTools };
+                }))
+              } else if (evtData.type === 'done') {
+                setMessages((prev) => prev.map(m => m.id === message_uuid ? { ...m, status: 'completed' } : m))
+                setIsWaiting(false)
+                break
+              }
+            } catch (e) {
+              console.error('SSE parse error:', e, 'Data:', dataStr)
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error(err)
+      setIsWaiting(false)
+    }
   }
 
   const handleKeyDown = (e) => {
@@ -88,7 +195,7 @@ export default function ChatScreen({ agentName = 'Alex Johnson', agentRole = 'Se
   return (
     <>
       <Head>
-        <title>{`Conversation with ${agentName} | MeetMyAgent.io`}</title>
+        <title>{`Conversation with ${agentDetails.name} | MeetMyAgent.io`}</title>
       </Head>
       <div className="flex min-h-screen flex-col bg-[#F5F5F5]">
         {/* Top navigation */}
@@ -144,8 +251,8 @@ export default function ChatScreen({ agentName = 'Alex Johnson', agentRole = 'Se
                     </svg>
                   </div>
                   <div>
-                    <h2 className="text-base font-bold text-gray-900">{agentName}</h2>
-                    <p className="text-sm text-gray-500">{agentRole}</p>
+                    <h2 className="text-base font-bold text-gray-900">{agentDetails.name}</h2>
+                    <p className="text-sm text-gray-500">AI Agent</p>
                     <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-emerald-600">
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                       Available
@@ -202,7 +309,7 @@ export default function ChatScreen({ agentName = 'Alex Johnson', agentRole = 'Se
               <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
                 <div>
                   <h1 className="text-base font-bold text-gray-900">
-                    Conversation with {agentName}
+                    Conversation with {agentDetails.name}
                   </h1>
                   <div className="mt-0.5 flex items-center gap-1.5 text-xs">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -214,7 +321,11 @@ export default function ChatScreen({ agentName = 'Alex Johnson', agentRole = 'Se
               {/* Messages */}
               <div ref={scrollRef} className="flex-1 overflow-y-auto bg-gray-50/50 p-6">
                 <div className="space-y-6">
-                  {messages.map((msg) => (
+                  {isInitializing ? (
+                    <div className="flex justify-center p-8 text-gray-400">Loading chat history...</div>
+                  ) : messages.length === 0 ? (
+                    <div className="flex justify-center p-8 text-gray-400">No messages yet. Say hello!</div>
+                  ) : messages.map((msg) => (
                     <div
                       key={msg.id}
                       className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -239,19 +350,45 @@ export default function ChatScreen({ agentName = 'Alex Johnson', agentRole = 'Se
                       )}
                       <div className="max-w-[75%]">
                         {msg.sender === 'agent' && (
-                          <p className="mb-1 text-xs font-medium text-gray-500">{agentName}</p>
+                          <p className="mb-1 text-xs font-medium text-gray-500">{agentDetails.name}</p>
                         )}
                         {msg.sender === 'user' && (
                           <p className="mb-1 text-right text-xs font-medium text-gray-500">You</p>
+                        )}
+                        {msg.tools && msg.tools.length > 0 && (
+                          <div className="mb-2 flex flex-col gap-1.5">
+                            {msg.tools.map((tool, idx) => (
+                              <div key={idx} className="flex flex-col gap-1 rounded-xl bg-gray-100/80 px-3.5 py-2.5 text-xs text-gray-600 border border-gray-200 shadow-sm">
+                                <div className="flex items-center gap-2">
+                                  {tool.status === 'searching' ? (
+                                    <svg className="h-3.5 w-3.5 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                  ) : (
+                                    <svg className="h-3.5 w-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  )}
+                                  <span className="font-semibold text-gray-700">
+                                    {tool.name === 'search_knowledge_base' ? 'Searching knowledge base...' : `Using ${tool.name}...`}
+                                  </span>
+                                </div>
+                                {tool.status === 'done' && (
+                                  <span className="pl-5 text-[11px] text-gray-500">{tool.result}</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         )}
                         <div
                           className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                             msg.sender === 'user'
                               ? 'rounded-br-none bg-blue-600 text-white'
-                              : 'rounded-bl-none border border-gray-100 bg-white text-gray-800 shadow-sm'
+                              : 'rounded-bl-none border border-gray-100 bg-white text-gray-800 shadow-sm whitespace-pre-wrap'
                           }`}
                         >
-                          {msg.text}
+                          {msg.text || (msg.status === 'pending' ? <span className="animate-pulse">...</span> : '')}
                         </div>
                       </div>
                     </div>
@@ -272,7 +409,7 @@ export default function ChatScreen({ agentName = 'Alex Johnson', agentRole = 'Se
                   />
                   <button
                     onClick={handleSend}
-                    disabled={!input.trim()}
+                    disabled={!input.trim() || isWaiting || !chat_id}
                     className="flex shrink-0 items-center gap-1 rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:bg-gray-300"
                   >
                     Send

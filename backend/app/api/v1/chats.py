@@ -129,10 +129,11 @@ async def send_message(
     await db.commit()
     await db.refresh(assistant_msg)
 
-    redis = Redis.from_url(settings.redis_url)
+    import redis as sync_redis
+    sync_client = sync_redis.Redis.from_url(settings.redis_url)
     from rq import Queue
 
-    q = Queue("agent", connection=redis)
+    q = Queue("agent", connection=sync_client)
     q.enqueue("worker.main.process_chat_message", chat.uuid, assistant_msg.uuid, current_user.uuid)
 
     return MessageSendResponse(
@@ -171,19 +172,29 @@ async def stream_message(
 
         return EventSourceResponse(done_gen())
 
-    redis = await Redis.from_url(settings.redis_url, decode_responses=True)
+    redis_client = await Redis.from_url(settings.redis_url, decode_responses=True)
 
     async def event_generator():
-        pubsub = redis.pubsub()
+        pubsub = redis_client.pubsub()
         await pubsub.subscribe(f"stream:{message_uuid}")
 
-        async for message in pubsub.listen():
-            if message["type"] == "message":
-                data = json.loads(message["data"])
-                event_type = data.pop("type")
-                yield {"event": event_type, "data": json.dumps(data)}
-                if event_type == "done":
-                    break
+        import asyncio
+        while True:
+            try:
+                message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                if message is not None:
+                    data = json.loads(message["data"])
+                    event_type = data.get("type")
+                    yield {"event": event_type, "data": json.dumps(data)}
+                    if event_type in ("done", "error"):
+                        break
+                await asyncio.sleep(0.01)
+            except Exception as e:
+                # Handle timeout or redis disconnection gracefully
+                from redis.exceptions import TimeoutError
+                if isinstance(e, TimeoutError):
+                    continue
+                break
 
         await pubsub.unsubscribe(f"stream:{message_uuid}")
         await pubsub.close()

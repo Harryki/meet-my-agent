@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import LoginModal from '../../components/LoginModal'
 import { useAuth } from '../../context/AuthContext'
+import { apiRequest } from '../../lib/api'
 
 const tags = ['Product Strategy', 'B2B SaaS', 'Career Growth', 'Leadership']
 
@@ -43,6 +44,63 @@ export default function ProfilePage() {
 
   const { user, logout } = useAuth()
   const [isLoginOpen, setIsLoginOpen] = useState(false)
+  const [agent, setAgent] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  const [isEditing, setIsEditing] = useState(false)
+  const [editForm, setEditForm] = useState({ name: '', persona: '' })
+  const [saving, setSaving] = useState(false)
+
+  const isOwner = user?.agent?.uuid === agent_id
+
+  const startEdit = () => {
+    setEditForm({ name: agent?.name || '', persona: agent?.persona || '' })
+    setIsEditing(true)
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const res = await apiRequest(`/v1/agents/${agent_id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name: editForm.name, persona: editForm.persona })
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setAgent(data)
+        setIsEditing(false)
+      } else {
+        alert('Failed to save profile')
+      }
+    } catch (err) {
+      console.error(err)
+      alert('Failed to save profile')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleCancel = () => {
+    setIsEditing(false)
+  }
+
+  useEffect(() => {
+    if (!agent_id) return
+    const fetchAgent = async () => {
+      try {
+        const res = await apiRequest(`/v1/agents/${agent_id}`)
+        if (res.ok) {
+          const data = await res.json()
+          setAgent(data)
+        }
+      } catch (err) {
+        console.error('Failed to load agent', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchAgent()
+  }, [agent_id])
 
   const handleLogout = () => {
     logout()
@@ -105,11 +163,11 @@ export default function ProfilePage() {
         {/* Breadcrumb */}
         <div className="mx-auto max-w-6xl px-4 pt-6 sm:px-6 lg:px-8">
           <nav className="flex items-center gap-2 text-sm text-gray-500">
-            <a href="#" className="transition hover:text-gray-700">Home</a>
+            <Link href="/" className="transition hover:text-gray-700">Home</Link>
             <span>/</span>
-            <a href="#" className="transition hover:text-gray-700">Explore</a>
+            <Link href="#" className="transition hover:text-gray-700">Explore</Link>
             <span>/</span>
-            <span className="text-gray-900">Alex Johnson</span>
+            <span className="text-gray-900">{agent?.name || 'Loading...'}</span>
           </nav>
         </div>
 
@@ -144,10 +202,27 @@ export default function ProfilePage() {
                 </div>
 
                 {/* Name & title */}
-                <div className="text-center">
-                  <h1 className="text-xl font-bold text-gray-900">Alex Johnson</h1>
-                  <p className="mt-1 text-sm text-gray-600">Senior Product Manager</p>
-                  <p className="text-sm font-medium text-gray-900">@ Google</p>
+                <div className="text-center relative">
+                  {isOwner && !isEditing && (
+                    <button onClick={startEdit} className="absolute right-0 top-0 p-2 text-gray-500 hover:text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-full transition-colors" title="Edit Profile">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </button>
+                  )}
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      className="text-xl font-bold text-gray-900 border border-gray-300 rounded px-2 py-1 mb-2 w-full text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={editForm.name}
+                      onChange={(e) => setEditForm({...editForm, name: e.target.value})}
+                      placeholder="Agent Name"
+                    />
+                  ) : (
+                    <h1 className="text-xl font-bold text-gray-900">{agent?.name || 'Loading...'}</h1>
+                  )}
+                  <p className="mt-1 text-sm text-gray-600">AI Agent</p>
+                  <p className="text-sm font-medium text-gray-900">@ MeetMyAgent</p>
                   {agent_id && <p className="mt-1 text-xs text-gray-400">Agent ID: {agent_id}</p>}
                 </div>
 
@@ -226,12 +301,50 @@ export default function ProfilePage() {
             <div className="flex-1 space-y-6">
               {/* What to expect */}
               <section className="rounded-2xl bg-white p-6 shadow-sm sm:p-8">
-                <h2 className="text-lg font-bold text-gray-900">What to expect</h2>
-                <div className="mt-4 space-y-4 text-sm leading-relaxed text-gray-600">
-                  {expectations.map((text, index) => (
-                    <p key={index}>{text}</p>
-                  ))}
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-bold text-gray-900">What to expect (Persona)</h2>
+                  {isOwner && !isEditing && (
+                    <button onClick={startEdit} className="text-sm font-medium text-blue-600 hover:underline">Edit Persona</button>
+                  )}
                 </div>
+                <div className="mt-4 space-y-4 text-sm leading-relaxed text-gray-600">
+                  {isEditing ? (
+                    <textarea
+                      className="w-full border border-gray-300 rounded-lg p-3 text-gray-700 min-h-[150px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={editForm.persona}
+                      onChange={(e) => setEditForm({...editForm, persona: e.target.value})}
+                      placeholder="Describe your agent's persona and what to expect..."
+                    />
+                  ) : (
+                    agent?.persona ? (
+                      <p className="whitespace-pre-wrap">{agent.persona}</p>
+                    ) : (
+                      expectations.map((text, index) => (
+                        <p key={index}>{text}</p>
+                      ))
+                    )
+                  )}
+                </div>
+                {isEditing && (
+                  <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-gray-100">
+                    <button onClick={handleCancel} disabled={saving} className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
+                      Cancel
+                    </button>
+                    <button onClick={handleSave} disabled={saving} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-2">
+                      {saving ? (
+                        <>
+                          <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Saving...
+                        </>
+                      ) : (
+                        'Save Changes'
+                      )}
+                    </button>
+                  </div>
+                )}
               </section>
 
               {/* Start conversation CTA */}

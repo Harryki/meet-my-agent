@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-
+from .agent import AgentResponse
 
 class GoogleRegisterRequest(BaseModel):
     code: str
@@ -28,5 +28,6 @@ class UserResponse(BaseModel):
     name: str
     avatar_url: str | None
     role: str
+    agent: AgentResponse | None = None
 
     model_config = {"from_attributes": True}

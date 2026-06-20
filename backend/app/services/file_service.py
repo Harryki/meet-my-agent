@@ -57,10 +57,27 @@ async def upsert_file(
 
     await db.commit()
     await db.refresh(file_meta)
+
+    from app.models.agent import Agent
+    from app.services.rag_service import RAGService
+    agent_result = await db.execute(select(Agent).where(Agent.user_id == user.id))
+    agent = agent_result.scalar_one_or_none()
+
+    if agent:
+        rag = RAGService()
+        if file_meta:
+            await rag.delete_file_chunks(file_meta.uuid)
+        text_content = content.decode("utf-8", errors="ignore")
+        await rag.process_file(file_uuid, agent.uuid, text_content, filename)
+
     return file_meta
 
 
 async def delete_file(db: AsyncSession, file_meta: FileMetadata) -> None:
+    from app.services.rag_service import RAGService
+    rag = RAGService()
+    await rag.delete_file_chunks(file_meta.uuid)
+
     await storage.delete(file_meta.storage_path)
     await db.delete(file_meta)
     await db.commit()
