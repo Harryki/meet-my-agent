@@ -95,6 +95,11 @@ export default function Sidebar({
                   >
                     <FileText size={16} className="flex-shrink-0" />
                     <span className="truncate">{file.name}</span>
+                    {file.isLocal && (
+                      <span className="ml-auto text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                        미저장
+                      </span>
+                    )}
                   </button>
                 ))}
               </nav>

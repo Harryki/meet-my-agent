@@ -35,10 +35,12 @@ export async function apiRequest(path, options = {}) {
   const baseUrl = getApiBaseUrl()
   const url = `${baseUrl}${path}`
 
-  const headers = {
-    'Content-Type': 'application/json',
-    ...options.headers,
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
+  const headers = {}
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json'
   }
+  Object.assign(headers, options.headers || {})
 
   if (typeof window !== 'undefined') {
     const accessToken = localStorage.getItem('access_token')
@@ -91,6 +93,45 @@ export function clearTokens() {
   if (typeof window === 'undefined') return
   localStorage.removeItem('access_token')
   localStorage.removeItem('refresh_token')
+}
+
+export async function apiListFiles() {
+  const response = await apiRequest('/v1/files')
+  if (!response.ok) {
+    throw new Error(`Failed to list files: ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function apiGetFile(fileUuid) {
+  const response = await apiRequest(`/v1/files/${fileUuid}`)
+  if (!response.ok) {
+    throw new Error(`Failed to get file: ${response.status}`)
+  }
+  return response.text()
+}
+
+export async function apiUploadFile(fileUuid, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await apiRequest(`/v1/files/${fileUuid}`, {
+    method: 'PUT',
+    body: formData,
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to upload file: ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function apiDeleteFile(fileUuid) {
+  const response = await apiRequest(`/v1/files/${fileUuid}`, {
+    method: 'DELETE',
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to delete file: ${response.status}`)
+  }
+  return response.json()
 }
 
 export async function tryRefreshToken() {

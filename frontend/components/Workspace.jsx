@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import Head from 'next/head';
-import { Save, Trash2 } from 'lucide-react';
+import { Save, Trash2, Loader2 } from 'lucide-react';
 import Sidebar from './Sidebar';
 import DropOverlay from './DropOverlay';
 import UploadMenu from './UploadMenu';
 import { useAuth } from '../context/AuthContext';
-import { loadFiles, saveFiles } from '../lib/auth';
+import {
+  apiListFiles,
+  apiGetFile,
+  apiUploadFile,
+  apiDeleteFile,
+} from '../lib/api';
 import { generateUUID } from '../lib/uuid';
 import {
   isTextFile,
@@ -34,6 +39,10 @@ function buildFileName(title, originalName) {
   return `${trimmed}.md`;
 }
 
+function textToFile(content, filename) {
+  return new File([content], filename, { type: 'text/markdown' });
+}
+
 export default function Workspace() {
   const { user, logout } = useAuth();
   const [files, setFiles] = useState([]);
@@ -45,6 +54,9 @@ export default function Workspace() {
   const [draftContent, setDraftContent] = useState('');
   const [isDirty, setIsDirty] = useState(false);
   const [saveStatus, setSaveStatus] = useState('');
+  const [isLoadingList, setIsLoadingList] = useState(false);
+  const [loadingFileId, setLoadingFileId] = useState(null);
+  const [error, setError] = useState(null);
   const dragCounter = useRef(0);
   const fileInputRef = useRef(null);
   const folderInputRef = useRef(null);
@@ -53,18 +65,40 @@ export default function Workspace() {
 
   useEffect(() => {
     if (!user) return;
-    const stored = loadFiles(user.email);
-    setFiles(stored);
-    setInitialized(true);
-    if (stored.length > 0) {
-      setActiveFileId(stored[0].id);
-    }
-  }, [user]);
+    let cancelled = false;
 
-  useEffect(() => {
-    if (!initialized || !user) return;
-    saveFiles(user.email, files);
-  }, [files, initialized, user]);
+    async function fetchFiles() {
+      setIsLoadingList(true);
+      setError(null);
+      try {
+        const data = await apiListFiles();
+        if (cancelled) return;
+        const mapped = data.map((f) => ({
+          id: f.uuid,
+          name: f.filename,
+          path: f.filename,
+          content: null,
+          size: f.size,
+          createdAt: f.created_at,
+        }));
+        mapped.sort((a, b) => a.name.localeCompare(b.name));
+        setFiles(mapped);
+        setInitialized(true);
+        if (mapped.length > 0) {
+          setActiveFileId(mapped[0].id);
+        }
+      } catch (err) {
+        if (!cancelled) setError(err.message);
+      } finally {
+        if (!cancelled) setIsLoadingList(false);
+      }
+    }
+
+    fetchFiles();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   useEffect(() => {
     if (!activeFile) {
@@ -74,26 +108,62 @@ export default function Workspace() {
       setSaveStatus('');
       return;
     }
-    setDraftTitle(stripExtension(activeFile.name));
-    setDraftContent(activeFile.content);
-    setIsDirty(false);
-    setSaveStatus('');
+
+    if (activeFile.content !== null) {
+      setDraftTitle(stripExtension(activeFile.name));
+      setDraftContent(activeFile.content);
+      setIsDirty(false);
+      setSaveStatus('');
+      return;
+    }
+
+    let cancelled = false;
+
+    async function fetchContent() {
+      setLoadingFileId(activeFile.id);
+      setError(null);
+      try {
+        const content = await apiGetFile(activeFile.id);
+        if (cancelled) return;
+        setFiles((prev) =>
+          prev.map((f) => (f.id === activeFile.id ? { ...f, content } : f))
+        );
+        setDraftTitle(stripExtension(activeFile.name));
+        setDraftContent(content);
+        setIsDirty(false);
+        setSaveStatus('');
+      } catch (err) {
+        if (!cancelled) setError(err.message);
+      } finally {
+        if (!cancelled) setLoadingFileId(null);
+      }
+    }
+
+    fetchContent();
+    return () => {
+      cancelled = true;
+    };
   }, [activeFile?.id]);
 
   const loadRecords = useCallback(async (records) => {
     const loaded = [];
-    for (let i = 0; i < records.length; i++) {
-      const { file, path } = records[i];
+    for (const { file, path } of records) {
       try {
         const content = await readFileAsText(file);
+        const id = generateUUID();
+        const uploadFile = textToFile(content, file.name);
+        const data = await apiUploadFile(id, uploadFile);
         loaded.push({
-          id: generateUUID(),
-          name: file.name,
-          path: path || file.name,
+          id: data.uuid,
+          name: data.filename,
+          path: data.filename,
           content,
+          size: data.size,
+          createdAt: data.created_at,
         });
       } catch (err) {
-        console.error('파일 읽기 실패:', file.name, err);
+        console.error('파일 업로드 실패:', file.name, err);
+        setError(err.message);
       }
     }
 
@@ -101,7 +171,7 @@ export default function Workspace() {
 
     setFiles((prev) => {
       const next = [...prev, ...loaded];
-      next.sort((a, b) => a.path.localeCompare(b.path));
+      next.sort((a, b) => a.name.localeCompare(b.name));
       return next;
     });
     setActiveFileId(loaded[0].id);
@@ -124,13 +194,17 @@ export default function Workspace() {
 
   const handleCreateFile = useCallback(() => {
     const id = generateUUID();
+    const name = '새 파일.md';
     const newFile = {
       id,
-      name: '새 파일.md',
-      path: '새 파일.md',
+      name,
+      path: name,
       content: '',
+      size: 0,
+      createdAt: new Date().toISOString(),
+      isLocal: true,
     };
-    setFiles((prev) => [newFile, ...prev]);
+    setFiles((prev) => [newFile, ...prev].sort((a, b) => a.name.localeCompare(b.name)));
     setActiveFileId(id);
   }, []);
 
@@ -154,41 +228,57 @@ export default function Workspace() {
     [activeFile, draftTitle]
   );
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     if (!activeFile || !isDirty) return;
 
     const newName = buildFileName(draftTitle, activeFile.name);
-    const updated = {
-      ...activeFile,
-      name: newName,
-      path: newName,
-      content: draftContent,
-    };
+    const uploadFile = textToFile(draftContent, newName);
 
-    setFiles((prev) =>
-      prev.map((f) => (f.id === activeFile.id ? updated : f))
-    );
-    setIsDirty(false);
-    setSaveStatus('파일이 저장되었습니다.');
+    try {
+      const data = await apiUploadFile(activeFile.id, uploadFile);
+      setFiles((prev) =>
+        prev.map((f) =>
+          f.id === activeFile.id
+            ? {
+                ...f,
+                name: data.filename,
+                path: data.filename,
+                content: draftContent,
+                size: data.size,
+                createdAt: data.created_at,
+                isLocal: false,
+              }
+            : f
+        )
+      );
+      setIsDirty(false);
+      setSaveStatus('파일이 저장되었습니다.');
 
-    // TODO: 백엔드 API 연동 시 이 파일을 서버로 전송
-    console.log('TODO: 백엔드 저장', updated);
-
-    const timer = setTimeout(() => setSaveStatus(''), 2000);
-    return () => clearTimeout(timer);
+      const timer = setTimeout(() => setSaveStatus(''), 2000);
+      return () => clearTimeout(timer);
+    } catch (err) {
+      setError(err.message);
+    }
   }, [activeFile, draftContent, draftTitle, isDirty]);
 
-  const handleDelete = useCallback(() => {
+  const handleDelete = useCallback(async () => {
     if (!activeFile) return;
     const ok = window.confirm('파일을 삭제하시겠습니까?');
     if (!ok) return;
 
-    const idx = files.findIndex((f) => f.id === activeFile.id);
-    const nextId =
-      files[idx + 1]?.id || files[idx - 1]?.id || null;
+    try {
+      if (!activeFile.isLocal) {
+        await apiDeleteFile(activeFile.id);
+      }
+      const idx = files.findIndex((f) => f.id === activeFile.id);
+      const nextId =
+        files[idx + 1]?.id || files[idx - 1]?.id || null;
 
-    setActiveFileId(nextId);
-    setFiles((prev) => prev.filter((f) => f.id !== activeFile.id));
+      setActiveFileId(nextId);
+      setFiles((prev) => prev.filter((f) => f.id !== activeFile.id));
+    } catch (err) {
+      setError(err.message);
+    }
   }, [activeFile, files]);
 
   useEffect(() => {
@@ -273,6 +363,12 @@ export default function Workspace() {
                   {saveStatus}
                 </span>
               )}
+              {isLoadingList && (
+                <span className="text-xs text-gray-500 flex items-center gap-1">
+                  <Loader2 size={12} className="animate-spin" />
+                  파일 목록 로딩 중...
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               {activeFile && (
@@ -312,6 +408,12 @@ export default function Workspace() {
             </div>
           </header>
 
+          {error && (
+            <div className="px-4 py-2 bg-red-50 border-b border-red-100 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
           <div className="flex-1 overflow-y-auto">
             <div className="max-w-[900px] mx-auto w-full px-8 py-12">
               {activeFile ? (
@@ -324,11 +426,18 @@ export default function Workspace() {
                     className="w-full text-4xl font-bold text-gray-900 placeholder-gray-300 focus:outline-none bg-transparent mb-6"
                   />
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 min-h-[60vh] p-6">
-                    <CrepeEditor
-                      key={activeFile.id}
-                      value={activeFile.content}
-                      onChange={handleEditorChange}
-                    />
+                    {loadingFileId === activeFile.id ? (
+                      <div className="flex items-center justify-center h-64 text-gray-400 gap-2">
+                        <Loader2 size={18} className="animate-spin" />
+                        파일 내용을 불러오는 중...
+                      </div>
+                    ) : (
+                      <CrepeEditor
+                        key={activeFile.id}
+                        value={activeFile.content}
+                        onChange={handleEditorChange}
+                      />
+                    )}
                   </div>
                 </>
               ) : (
