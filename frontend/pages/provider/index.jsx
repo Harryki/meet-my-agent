@@ -1,5 +1,6 @@
 import React from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 import { 
   BarChart3, 
   MessageSquare, 
@@ -34,6 +35,8 @@ export default function ProviderDashboard() {
     { id: 5, name: 'Evan Wright', email: 'evan.w@example.com', dialogs: 32, duration: '19m', time: 'Yesterday', status: 'Completed' },
   ];
 
+  const profileLink = user?.agent?.uuid ? `/profile/${user.agent.uuid}` : `/profile/alex-johnson`;
+
   return (
     <>
       <Head>
@@ -49,9 +52,12 @@ export default function ProviderDashboard() {
               <h1 className="text-2xl font-bold text-gray-900">Provider Dashboard</h1>
               <p className="text-sm text-gray-500 mt-1">Overview of your AI Agent's performance and knowledge base.</p>
             </div>
-            <button className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm">
+            <Link 
+              href={profileLink}
+              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm inline-flex items-center justify-center"
+            >
               View Public Profile
-            </button>
+            </Link>
           </div>
 
           {/* Stats Grid */}
@@ -159,9 +165,9 @@ export default function ProviderDashboard() {
                     </div>
                   </div>
                   
-                  <button className="w-full mt-6 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors">
+                  <Link href="/provider/knowledge" className="flex justify-center w-full mt-6 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors">
                     Manage Documents
-                  </button>
+                  </Link>
                 </div>
               </div>
             </div>
