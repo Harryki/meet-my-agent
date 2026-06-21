@@ -1,0 +1,44 @@
+# Local development overrides — AUTO-LOADED by `docker compose up`.
+# Production explicitly skips this file:  docker compose -f docker-compose.yml up
+#
+# Lists (volumes/environment) merge with the base; `command` is replaced.
+#
+services:
+  app:
+    command: ["api-dev"]                 # uvicorn --reload
+    volumes:
+      - ./backend/app:/app/app           # live source mount (merged with base data volumes)
+    environment:
+      - GOOGLE_REDIRECT_URI=http://localhost:3000/auth/callback
+
+  worker:
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/worker:/app/worker
+    environment:
+      - GOOGLE_REDIRECT_URI=http://localhost:3000/auth/callback
+
+  frontend:
+    build:
+      context: ./frontend
+      target: dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - API_URL=http://app:8000
+      - WATCHPACK_POLLING=true
+      - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-920557640661-f9v5er0qaq2i5vsek44d9gr2tbj7nhdv.apps.googleusercontent.com}
+      - NEXT_PUBLIC_GOOGLE_REDIRECT_URI=http://localhost:3000/auth/callback
+    volumes:
+      - ./frontend/pages:/app/pages
+      - ./frontend/components:/app/components
+      - ./frontend/context:/app/context
+      - ./frontend/lib:/app/lib
+      - ./frontend/styles:/app/styles
+      - ./frontend/next.config.js:/app/next.config.js
+      - ./frontend/tailwind.config.js:/app/tailwind.config.js
+      - ./frontend/postcss.config.js:/app/postcss.config.js
+      - ./frontend/public:/app/public
+    depends_on:
+      - app

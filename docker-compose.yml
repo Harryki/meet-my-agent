@@ -1,9 +1,12 @@
+# Production base — backend only (the frontend is hosted on Vercel in prod).
+#
+#   Prod (EC2):  docker compose -f docker-compose.yml up -d --build
+#   Local dev:   docker compose up          # docker-compose.override.yml auto-loads
+#
 services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -17,22 +20,20 @@ services:
       context: ./backend
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "80:8000"
     environment:
       - DATABASE_URL=sqlite+aiosqlite:////app/data/db.sqlite3
       - REDIS_URL=redis://redis:6379/0
       - STORAGE_LOCAL_BASE_PATH=/app/data/storage/files
-      - GOOGLE_REDIRECT_URI=http://localhost:3000/auth/callback
     env_file:
       - ./backend/.env
     volumes:
-      - ./backend/app:/app/app
       - sqlite_data:/app/data
       - ./backend/storage/files:/app/data/storage/files
     depends_on:
       redis:
         condition: service_healthy
-    command: ["api-dev"]
+    command: ["api"]
 
   worker:
     build:
@@ -42,43 +43,15 @@ services:
       - DATABASE_URL=sqlite+aiosqlite:////app/data/db.sqlite3
       - REDIS_URL=redis://redis:6379/0
       - STORAGE_LOCAL_BASE_PATH=/app/data/storage/files
-      - GOOGLE_REDIRECT_URI=http://localhost:3000/auth/callback
     env_file:
       - ./backend/.env
     volumes:
-      - ./backend/app:/app/app
-      - ./backend/worker:/app/worker
       - sqlite_data:/app/data
       - ./backend/storage/files:/app/data/storage/files
     depends_on:
       redis:
         condition: service_healthy
     command: ["worker"]
-
-  frontend:
-    build:
-      context: ./frontend
-      target: dev
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      - API_URL=http://app:8000
-      - WATCHPACK_POLLING=true
-      - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-920557640661-f9v5er0qaq2i5vsek44d9gr2tbj7nhdv.apps.googleusercontent.com}
-      - NEXT_PUBLIC_GOOGLE_REDIRECT_URI=http://localhost:3000/auth/callback
-    volumes:
-      - ./frontend/pages:/app/pages
-      - ./frontend/components:/app/components
-      - ./frontend/context:/app/context
-      - ./frontend/lib:/app/lib
-      - ./frontend/styles:/app/styles
-      - ./frontend/next.config.js:/app/next.config.js
-      - ./frontend/tailwind.config.js:/app/tailwind.config.js
-      - ./frontend/postcss.config.js:/app/postcss.config.js
-      - ./frontend/public:/app/public
-    depends_on:
-      - app
 
 volumes:
   redis_data:
