@@ -1,4 +1,12 @@
 export function getApiBaseUrl() {
+  // In the browser, default to same-origin relative URLs so requests flow
+  // through the Next.js rewrite proxy (see next.config.js). This avoids CORS
+  // and mixed-content issues in production. Set NEXT_PUBLIC_API_URL only if you
+  // want the browser to call the backend directly (requires backend CORS).
+  if (typeof window !== 'undefined') {
+    return process.env.NEXT_PUBLIC_API_URL || ''
+  }
+  // Server-side (SSR / Next.js rewrites): talk to the backend directly.
   return process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 }
 
