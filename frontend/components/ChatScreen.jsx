@@ -111,7 +111,12 @@ export default function ChatScreen({ defaultAgentName = 'Agent', defaultAgentRol
 
       const baseUrl = getApiBaseUrl()
       const token = localStorage.getItem('access_token')
-      const url = new URL(`${baseUrl}/v1/chats/${chat_id}/messages/${message_uuid}/stream`)
+      // baseUrl is '' in the browser (same-origin via Next.js rewrite proxy), so give
+      // new URL() a base to resolve against; an absolute baseUrl overrides the base.
+      const url = new URL(
+        `${baseUrl}/v1/chats/${chat_id}/messages/${message_uuid}/stream`,
+        window.location.origin
+      )
       
       // using EventSource requires sending token somehow, or using fetch for streaming
       // fetch approach for SSE
