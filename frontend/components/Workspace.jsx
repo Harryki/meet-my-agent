@@ -366,7 +366,7 @@ export default function Workspace() {
       </Head>
 
       <div className="h-screen flex flex-col bg-white overflow-hidden">
-        <TopNavbar userName={user?.name || 'Alex Johnson'} agentUuid={user?.agent?.uuid} onLogout={logout} />
+        <TopNavbar user={user} agentUuid={user?.agent?.uuid} onLogout={logout} />
 
         <div className="flex flex-1 overflow-hidden">
           <Sidebar

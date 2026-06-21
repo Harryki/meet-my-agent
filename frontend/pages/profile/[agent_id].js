@@ -5,6 +5,7 @@ import { useRouter } from 'next/router'
 import LoginModal from '../../components/LoginModal'
 import { useAuth } from '../../context/AuthContext'
 import { apiRequest } from '../../lib/api'
+import TopNavbar from '../../components/TopNavbar'
 
 const tags = ['Product Strategy', 'B2B SaaS', 'Career Growth', 'Leadership']
 
@@ -130,55 +131,15 @@ export default function ProfilePage() {
       </Head>
       <main className="min-h-screen bg-[#F5F5F5]">
         {/* Navigation */}
-        <header className="sticky top-0 z-40 border-b border-gray-200/60 bg-white/90 px-4 backdrop-blur sm:px-6 lg:px-8">
-          <div className="mx-auto flex h-16 max-w-6xl items-center justify-between">
-            <div className="flex items-center gap-8">
-              <span className="text-base font-bold text-gray-900 sm:text-lg">MeetMyAgent.io</span>
-              <nav className="hidden items-center gap-6 md:flex">
-                <a href="#" className="text-sm font-medium text-gray-600 transition hover:text-gray-900">
-                  Explore
-                </a>
-                <a href="#" className="text-sm font-medium text-gray-600 transition hover:text-gray-900">
-                  How it works
-                </a>
-                <Link href="/provider" className="text-sm font-medium text-gray-600 transition hover:text-gray-900">
-                  For Providers
-                </Link>
-              </nav>
-            </div>
-            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-              {user ? (
-                <button
-                  onClick={handleLogout}
-                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-                >
-                  로그아웃
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={() => {
-                      setLoginReturnPath(null)
-                      setIsLoginOpen(true)
-                    }}
-                    className="text-xs font-medium text-gray-600 transition hover:text-gray-900 sm:text-sm"
-                  >
-                    Sign in
-                  </button>
-                  <button
-                    onClick={() => {
-                      setLoginReturnPath(null)
-                      setIsLoginOpen(true)
-                    }}
-                    className="hidden rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 sm:block"
-                  >
-                    Get started
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </header>
+        <TopNavbar 
+          user={user} 
+          agentUuid={agent_id} 
+          onLogout={handleLogout} 
+          onLogin={() => {
+            setLoginReturnPath(null)
+            setIsLoginOpen(true)
+          }} 
+        />
 
         {/* Breadcrumb */}
         <div className="mx-auto max-w-6xl px-4 pt-6 sm:px-6 lg:px-8">
@@ -320,30 +281,7 @@ export default function ProfilePage() {
             {/* Right column */}
             <div className="flex-1 space-y-6">
               
-              {/* Unanswered Questions Alert */}
-              {isOwner && missingInfo.length > 0 && (
-                <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm sm:p-8">
-                  <h2 className="text-lg font-bold text-amber-900 flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    Unanswered Questions ({missingInfo.length})
-                  </h2>
-                  <p className="mt-2 text-sm text-amber-800">Your AI could not answer the following questions. Provide answers to improve your agent.</p>
-                  <ul className="mt-4 space-y-3">
-                    {missingInfo.slice(0, 3).map(info => (
-                      <li key={info.uuid} className="bg-white/60 p-3 rounded-lg border border-amber-100 text-sm text-gray-800">
-                        "{info.question}"
-                      </li>
-                    ))}
-                  </ul>
-                  {missingInfo.length > 3 && (
-                    <Link href="/provider" className="mt-4 inline-block text-sm font-medium text-amber-700 hover:text-amber-800 underline">
-                      View all in Provider Dashboard
-                    </Link>
-                  )}
-                </section>
-              )}
+
 
               {/* What to expect */}
               <section className="rounded-2xl bg-white p-6 shadow-sm sm:p-8">
@@ -476,6 +414,31 @@ export default function ProfilePage() {
                   Free to start · No account required · Responses typically within a few seconds
                 </p>
               </section>
+
+              {/* Unanswered Questions Alert */}
+              {isOwner && missingInfo.length > 0 && (
+                <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm sm:p-8">
+                  <h2 className="text-lg font-bold text-amber-900 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    Unanswered Questions ({missingInfo.length})
+                  </h2>
+                  <p className="mt-2 text-sm text-amber-800">Your AI could not answer the following questions. Provide answers to improve your agent.</p>
+                  <ul className="mt-4 space-y-3">
+                    {missingInfo.slice(0, 3).map(info => (
+                      <li key={info.uuid} className="bg-white/60 p-3 rounded-lg border border-amber-100 text-sm text-gray-800">
+                        "{info.question}"
+                      </li>
+                    ))}
+                  </ul>
+                  {missingInfo.length > 3 && (
+                    <Link href="/provider" className="mt-4 inline-block text-sm font-medium text-amber-700 hover:text-amber-800 underline">
+                      View all in Provider Dashboard
+                    </Link>
+                  )}
+                </section>
+              )}
 
               {/* Conversation history */}
               {user && (

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useAuth } from '../context/AuthContext'
 import { apiRequest, getApiBaseUrl } from '../lib/api'
+import TopNavbar from './TopNavbar'
 
 const tips = [
   'Be specific about your situation',
@@ -199,32 +200,12 @@ export default function ChatScreen({ defaultAgentName = 'Agent', defaultAgentRol
       </Head>
       <div className="flex min-h-screen flex-col bg-[#F5F5F5]">
         {/* Top navigation */}
-        <header className="sticky top-0 z-40 border-b border-gray-200/60 bg-white/90 px-4 backdrop-blur sm:px-6 lg:px-8">
-          <div className="mx-auto flex h-16 max-w-7xl items-center justify-between">
-            <div className="flex items-center gap-8">
-              <Link href="/" className="text-base font-bold text-gray-900 sm:text-lg">
-                MeetMyAgent.io
-              </Link>
-              <nav className="hidden items-center gap-6 md:flex">
-                <a href="#" className="text-sm font-medium text-gray-600 transition hover:text-gray-900">
-                  Explore
-                </a>
-                <a href="#" className="text-sm font-medium text-gray-600 transition hover:text-gray-900">
-                  Sessions
-                </a>
-                <a href="#" className="text-sm font-medium text-gray-600 transition hover:text-gray-900">
-                  Saved Agents
-                </a>
-              </nav>
-            </div>
-            <button
-              onClick={logout}
-              className="text-sm font-medium text-gray-600 transition hover:text-gray-900"
-            >
-              Sign Out
-            </button>
-          </div>
-        </header>
+        <TopNavbar 
+          user={user} 
+          agentUuid={agent_id} 
+          onLogout={logout} 
+          onLogin={() => router.push('/')} 
+        />
 
         {/* Main content */}
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
