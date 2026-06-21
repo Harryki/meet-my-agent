@@ -13,11 +13,11 @@ export function getGoogleRedirectUri() {
   return process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI || 'http://localhost:5173/auth/callback'
 }
 
-export function buildGoogleAuthUrl() {
+export function buildGoogleAuthUrl(returnPath) {
   const clientId = getGoogleClientId()
   const redirectUri = getGoogleRedirectUri()
   const scope = encodeURIComponent('openid email profile')
-  const state = encodeURIComponent(window.location.pathname + window.location.search)
+  const state = encodeURIComponent(returnPath || (window.location.pathname + window.location.search))
 
   return (
     `https://accounts.google.com/o/oauth2/v2/auth?` +

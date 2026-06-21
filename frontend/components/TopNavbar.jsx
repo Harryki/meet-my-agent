@@ -1,8 +1,8 @@
 import Link from 'next/link';
 
-const PROTOTYPE_AGENT_ID = 'alex-johnson';
+export default function TopNavbar({ userName = 'User', agentUuid, onLogout }) {
+  const profileLink = agentUuid ? `/profile/${agentUuid}` : `/profile/alex-johnson`;
 
-export default function TopNavbar({ userName = 'Alex Johnson', onLogout }) {
   return (
     <header className="h-14 flex items-center justify-between px-6 bg-white border-b border-gray-200 shrink-0">
       <Link href="/" className="text-lg font-bold text-gray-900 tracking-tight">
@@ -11,7 +11,7 @@ export default function TopNavbar({ userName = 'Alex Johnson', onLogout }) {
 
       <nav className="hidden md:flex items-center gap-8">
         <Link
-          href={`/profile/${PROTOTYPE_AGENT_ID}`}
+          href={profileLink}
           className="text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors"
         >
           Profile
@@ -19,6 +19,9 @@ export default function TopNavbar({ userName = 'Alex Johnson', onLogout }) {
         <span className="text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors cursor-pointer">
           Explore
         </span>
+        <Link href="/provider" className="text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors">
+          Dashboard
+        </Link>
         <span className="text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors cursor-pointer">
           Sessions
         </span>

@@ -1,10 +1,10 @@
 import { buildGoogleAuthUrl } from '../lib/api'
 
-export default function LoginModal({ isOpen, onClose }) {
+export default function LoginModal({ isOpen, onClose, returnPath }) {
   if (!isOpen) return null
 
   const handleGoogleLogin = () => {
-    window.location.href = buildGoogleAuthUrl()
+    window.location.href = buildGoogleAuthUrl(returnPath)
   }
 
   return (

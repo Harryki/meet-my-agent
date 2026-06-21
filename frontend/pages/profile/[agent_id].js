@@ -14,29 +14,6 @@ const expectations = [
   'Ideal for aspiring PMs, career switchers, and early-stage startup founders looking for a reality check before their next move.',
 ]
 
-const conversationHistory = [
-  {
-    id: 'h1',
-    date: 'Jun 12, 2025',
-    duration: '32 min',
-    quote:
-      'We talked about making the move from engineering to PM. Alex gave concrete advice on portfolio structure and what interviewers at Google are actually looking for.',
-  },
-  {
-    id: 'h2',
-    date: 'May 28, 2025',
-    duration: '24 min',
-    quote:
-      'Discussed how to influence roadmap decisions without direct authority — really useful mental models for early-career PMs navigating complex org structures.',
-  },
-  {
-    id: 'h3',
-    date: 'May 3, 2025',
-    duration: '41 min',
-    quote:
-      'Deep dive on the job search strategy for PM roles at FAANG. Got clarity on resume highlights, how to approach recruiter reach-outs, and what hiring managers care about.',
-  },
-]
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -44,6 +21,7 @@ export default function ProfilePage() {
 
   const { user, logout } = useAuth()
   const [isLoginOpen, setIsLoginOpen] = useState(false)
+  const [loginReturnPath, setLoginReturnPath] = useState(null)
   const [agent, setAgent] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -84,6 +62,8 @@ export default function ProfilePage() {
     setIsEditing(false)
   }
 
+  const [history, setHistory] = useState([])
+
   useEffect(() => {
     if (!agent_id) return
     const fetchAgent = async () => {
@@ -101,6 +81,23 @@ export default function ProfilePage() {
     }
     fetchAgent()
   }, [agent_id])
+
+  useEffect(() => {
+    if (!user || !agent_id) return
+    const fetchHistory = async () => {
+      try {
+        const res = await apiRequest('/v1/chats')
+        if (res.ok) {
+          const data = await res.json()
+          const agentChats = data.filter(c => c.agent_uuid === agent_id)
+          setHistory(agentChats)
+        }
+      } catch (err) {
+        console.error('Failed to load history', err)
+      }
+    }
+    fetchHistory()
+  }, [user, agent_id])
 
   const handleLogout = () => {
     logout()
@@ -127,9 +124,9 @@ export default function ProfilePage() {
                 <a href="#" className="text-sm font-medium text-gray-600 transition hover:text-gray-900">
                   How it works
                 </a>
-                <a href="#" className="text-sm font-medium text-gray-600 transition hover:text-gray-900">
+                <Link href="/provider" className="text-sm font-medium text-gray-600 transition hover:text-gray-900">
                   For Providers
-                </a>
+                </Link>
               </nav>
             </div>
             <div className="flex shrink-0 items-center gap-2 sm:gap-3">
@@ -143,13 +140,19 @@ export default function ProfilePage() {
               ) : (
                 <>
                   <button
-                    onClick={() => setIsLoginOpen(true)}
+                    onClick={() => {
+                      setLoginReturnPath(null)
+                      setIsLoginOpen(true)
+                    }}
                     className="text-xs font-medium text-gray-600 transition hover:text-gray-900 sm:text-sm"
                   >
                     Sign in
                   </button>
                   <button
-                    onClick={() => setIsLoginOpen(true)}
+                    onClick={() => {
+                      setLoginReturnPath(null)
+                      setIsLoginOpen(true)
+                    }}
                     className="hidden rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 sm:block"
                   >
                     Get started
@@ -402,8 +405,16 @@ export default function ProfilePage() {
                     Private & confidential
                   </div>
                 </div>
-                <Link
-                  href={chatBasePath}
+                <button
+                  onClick={(e) => {
+                    if (!user) {
+                      e.preventDefault();
+                      setLoginReturnPath(chatBasePath);
+                      setIsLoginOpen(true);
+                    } else {
+                      router.push(chatBasePath);
+                    }
+                  }}
                   className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
                 >
                   Start Conversation
@@ -417,51 +428,25 @@ export default function ProfilePage() {
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
                   </svg>
-                </Link>
+                </button>
                 <p className="mt-3 text-center text-xs text-gray-500">
                   Free to start · No account required · Responses typically within a few seconds
                 </p>
               </section>
 
               {/* Conversation history */}
-              <section className="rounded-2xl bg-white p-6 shadow-sm sm:p-8">
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-lg font-bold text-gray-900">Conversation History</h2>
-                  <Link
-                    href={chatBasePath}
-                    className="flex items-center gap-1 text-sm font-medium text-blue-600 transition hover:text-blue-700"
-                  >
-                    See all
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Link>
-                </div>
-                <div className="space-y-4">
-                  {conversationHistory.map((item) => (
+              {user && (
+                <section className="rounded-2xl bg-white p-6 shadow-sm sm:p-8">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h2 className="text-lg font-bold text-gray-900">Conversation History</h2>
                     <Link
-                      key={item.id}
-                      href={`${chatBasePath}/${item.id}`}
-                      className="group flex items-start justify-between gap-4 rounded-xl bg-gray-100 p-4 transition hover:bg-gray-200"
+                      href={chatBasePath}
+                      className="flex items-center gap-1 text-sm font-medium text-blue-600 transition hover:text-blue-700"
                     >
-                      <div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <span className="font-semibold text-gray-900">{item.date}</span>
-                          <span className="text-gray-400">·</span>
-                          <span className="text-gray-500">{item.duration}</span>
-                        </div>
-                        <p className="mt-1 text-sm text-gray-600">“{item.quote}”</p>
-                      </div>
+                      See all
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
-                        className="mt-1 h-5 w-5 shrink-0 text-gray-400 transition group-hover:text-gray-600"
+                        className="h-4 w-4"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -470,14 +455,46 @@ export default function ProfilePage() {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                       </svg>
                     </Link>
-                  ))}
-                </div>
-              </section>
+                  </div>
+                  <div className="space-y-4">
+                    {history.length > 0 ? (
+                      history.map((item) => (
+                        <Link
+                          key={item.uuid}
+                          href={`${chatBasePath}/${item.uuid}`}
+                          className="group flex items-start justify-between gap-4 rounded-xl bg-gray-100 p-4 transition hover:bg-gray-200"
+                        >
+                          <div>
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="font-semibold text-gray-900">
+                                {new Date(item.created_at).toLocaleDateString()}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-sm text-gray-600">“{item.title || 'Untitled Conversation'}”</p>
+                          </div>
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="mt-1 h-5 w-5 shrink-0 text-gray-400 transition group-hover:text-gray-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </Link>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-500 py-4">No past conversations found. Start a new one!</p>
+                    )}
+                  </div>
+                </section>
+              )}
             </div>
           </div>
         </div>
 
-        <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
+        <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} returnPath={loginReturnPath} />
       </main>
     </>
   )

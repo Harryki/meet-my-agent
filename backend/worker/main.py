@@ -64,11 +64,19 @@ async def _process(chat_uuid: str, message_uuid: str, user_uuid: str) -> None:
             )
             history = msgs_result.scalars().all()
 
+            files_result = await db.execute(select(FileMetadata).where(FileMetadata.user_id == agent.user_id))
+            agent_files = files_result.scalars().all()
+            file_names = [f.original_name for f in agent_files]
+            file_list_str = ", ".join(file_names) if file_names else "None"
+
             base_prompt = agent.system_prompt or "You are a helpful assistant."
             rag_instruction = (
-                "\n\nIMPORTANT: You have access to a knowledge base containing the user's personal files. "
+                f"\n\nIMPORTANT: You have access to a knowledge base containing the user's personal files. "
+                f"Currently available files: [{file_list_str}]. "
                 "You MUST use the `search_knowledge_base` tool to search for ANY specific facts, names, or personal details. "
-                "DO NOT refuse to answer personal questions. ALWAYS assume the answer is in the knowledge base and search for it first."
+                "DO NOT refuse to answer personal questions. ALWAYS assume the answer is in the knowledge base and search for it first. "
+                "If the user asks 'what do you know', 'what can you answer', or similar questions, use the list of available files to suggest "
+                "specific questions they could ask you based on what those files likely contain."
             )
             messages = [
                 {"role": "system", "content": base_prompt + rag_instruction}
