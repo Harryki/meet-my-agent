@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User, UserRole
-from app.schemas.agent import AgentResponse, AgentUpdateRequest
+from app.schemas.agent import AgentResponse, AgentUpdateRequest, MissingInfoResponse
 from app.services import agent_service
 
 router = APIRouter(prefix="/agents", tags=["agents"])
@@ -70,3 +70,30 @@ async def update_agent(
         system_prompt=agent.system_prompt,
         is_active=agent.is_active,
     )
+
+
+@router.get("/{agent_uuid}/missing-info", response_model=list[MissingInfoResponse])
+async def get_missing_info(agent_uuid: str, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select
+    from app.models.missing_info import MissingInfoReport
+
+    agent = await agent_service.get_agent_by_uuid(db, agent_uuid)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+
+    result = await db.execute(
+        select(MissingInfoReport)
+        .where(MissingInfoReport.agent_id == agent.id)
+        .order_by(MissingInfoReport.created_at.desc())
+    )
+    reports = result.scalars().all()
+    
+    return [
+        MissingInfoResponse(
+            uuid=r.uuid,
+            question=r.question,
+            status=r.status,
+            created_at=r.created_at.isoformat()
+        )
+        for r in reports
+    ]

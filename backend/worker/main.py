@@ -25,6 +25,7 @@ async def _process(chat_uuid: str, message_uuid: str, user_uuid: str) -> None:
     from app.models.file import FileMetadata
     from app.models.chat import Chat
     from app.models.message import Message, MessageStatus
+    from app.models.missing_info import MissingInfoReport
     from app.services.rag_service import RAGService
 
     channel = f"stream:{message_uuid}"
@@ -69,14 +70,15 @@ async def _process(chat_uuid: str, message_uuid: str, user_uuid: str) -> None:
             file_names = [f.original_name for f in agent_files]
             file_list_str = ", ".join(file_names) if file_names else "None"
 
-            base_prompt = agent.system_prompt or "You are a helpful assistant."
+            provider_name = agent.user.name if agent.user else "your provider"
+            base_prompt = agent.system_prompt or f"You are an AI assistant answering on behalf of {provider_name}."
             rag_instruction = (
-                f"\n\nIMPORTANT: You have access to a knowledge base containing the user's personal files. "
+                f"\n\nIMPORTANT: You are an AI assistant representing {provider_name}. You must answer on their behalf using their knowledge base. "
                 f"Currently available files: [{file_list_str}]. "
                 "You MUST use the `search_knowledge_base` tool to search for ANY specific facts, names, or personal details. "
-                "DO NOT refuse to answer personal questions. ALWAYS assume the answer is in the knowledge base and search for it first. "
-                "If the user asks 'what do you know', 'what can you answer', or similar questions, use the list of available files to suggest "
-                "specific questions they could ask you based on what those files likely contain."
+                "If the user asks a question that is NOT found in the knowledge base, you MUST use the `report_missing_info` tool to save the question so "
+                f"{provider_name} can answer it later. After calling `report_missing_info`, respond to the user saying: "
+                f"'해당 내용은 제 지식베이스에 없어 {provider_name}님께 전달해두었습니다. 나중에 답변을 받으실 수 있습니다.'"
             )
             messages = [
                 {"role": "system", "content": base_prompt + rag_instruction}
@@ -116,12 +118,30 @@ async def _process(chat_uuid: str, message_uuid: str, user_uuid: str) -> None:
                 },
             }
 
+            report_tool = {
+                "type": "function",
+                "function": {
+                    "name": "report_missing_info",
+                    "description": "Report a question that the user asked but cannot be answered using the knowledge base. This saves the question so the provider can answer it later.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "question": {
+                                "type": "string",
+                                "description": "The exact question that cannot be answered",
+                            }
+                        },
+                        "required": ["question"],
+                    },
+                },
+            }
+
             publish("status", {"status": "calling_llm"})
 
             response = await client.chat.completions.create(
                 model="gpt-4o",
                 messages=messages,
-                tools=[search_tool],
+                tools=[search_tool, report_tool],
                 tool_choice="auto",
                 stream=True,
             )
@@ -160,32 +180,18 @@ async def _process(chat_uuid: str, message_uuid: str, user_uuid: str) -> None:
                 rag = RAGService()
 
                 for idx, tc_data in tool_calls.items():
+                    tool_name = tc_data["function"]["name"]
                     try:
                         args = json.loads(tc_data["function"]["arguments"])
                     except json.JSONDecodeError:
-                        args = {"query": "", "top_k": 3}
+                        args = {}
 
                     publish(
                         "tool_call",
                         {
-                            "tool": tc_data["function"]["name"],
+                            "tool": tool_name,
                             "arguments": args,
                         },
-                    )
-
-                    chunks = await rag.search(agent.uuid, args.get("query", ""), args.get("top_k", 3))
-
-                    publish(
-                        "tool_result",
-                        {
-                            "tool": "search_knowledge_base",
-                            "chunks_count": len(chunks),
-                            "files": list(set(c["filename"] for c in chunks)),
-                        },
-                    )
-
-                    context_str = "\n\n".join(
-                        f"[{c['filename']}] (score: {c['score']:.3f}):\n{c['text']}" for c in chunks
                     )
 
                     messages.append(
@@ -196,20 +202,55 @@ async def _process(chat_uuid: str, message_uuid: str, user_uuid: str) -> None:
                                     "id": tc_data["id"],
                                     "type": "function",
                                     "function": {
-                                        "name": tc_data["function"]["name"],
+                                        "name": tool_name,
                                         "arguments": tc_data["function"]["arguments"],
                                     },
                                 }
                             ],
                         }
                     )
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tc_data["id"],
-                            "content": context_str or "No relevant documents found.",
-                        }
-                    )
+
+                    if tool_name == "search_knowledge_base":
+                        chunks = await rag.search(agent.uuid, args.get("query", ""), args.get("top_k", 3))
+
+                        publish(
+                            "tool_result",
+                            {
+                                "tool": "search_knowledge_base",
+                                "chunks_count": len(chunks),
+                                "files": list(set(c["filename"] for c in chunks)),
+                            },
+                        )
+
+                        context_str = "\n\n".join(
+                            f"[{c['filename']}] (score: {c['score']:.3f}):\n{c['text']}" for c in chunks
+                        )
+
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc_data["id"],
+                                "content": context_str or "No relevant documents found.",
+                            }
+                        )
+                    elif tool_name == "report_missing_info":
+                        question = args.get("question", "")
+                        report = MissingInfoReport(
+                            agent_id=agent.id,
+                            chat_id=chat.id,
+                            question=question,
+                            status="pending"
+                        )
+                        db.add(report)
+                        await db.commit()
+
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc_data["id"],
+                                "content": "Question successfully reported to the provider.",
+                            }
+                        )
 
                 publish("status", {"status": "generating_response"})
 

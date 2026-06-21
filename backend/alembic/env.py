@@ -9,6 +9,12 @@ from alembic import context
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.models.base import Base
+from app.models.user import User
+from app.models.agent import Agent
+from app.models.chat import Chat
+from app.models.message import Message
+from app.models.file import FileMetadata
+from app.models.missing_info import MissingInfoReport
 
 config = context.config
 if config.config_file_name is not None:

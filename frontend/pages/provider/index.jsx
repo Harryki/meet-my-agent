@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { 
@@ -11,13 +11,25 @@ import {
   Database,
   Clock,
   FileText,
-  Users
+  Users,
+  AlertTriangle
 } from 'lucide-react';
 import TopNavbar from '../../components/TopNavbar';
 import { useAuth } from '../../context/AuthContext';
+import { apiRequest } from '../../lib/api';
 
 export default function ProviderDashboard() {
-  const { user, logout } = useAuth();
+  const { user, logout, token } = useAuth();
+  const [missingInfo, setMissingInfo] = useState([]);
+
+  useEffect(() => {
+    if (user?.agent?.uuid) {
+      apiRequest(`/v1/agents/${user.agent.uuid}/missing-info`)
+        .then(res => res.json())
+        .then(data => setMissingInfo(data))
+        .catch(err => console.error("Failed to fetch missing info", err));
+    }
+  }, [user?.agent?.uuid, token]);
 
   // Mock Data
   const stats = [
@@ -168,6 +180,43 @@ export default function ProviderDashboard() {
                   <Link href="/provider/knowledge" className="flex justify-center w-full mt-6 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors">
                     Manage Documents
                   </Link>
+                </div>
+              </div>
+
+              {/* Missing Info Alerts */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="border-b border-gray-200 bg-amber-50/50 px-6 py-4 flex items-center justify-between">
+                  <h2 className="text-base font-bold text-amber-900 flex items-center gap-2">
+                    <AlertTriangle size={18} className="text-amber-500" />
+                    Unanswered Questions
+                  </h2>
+                  <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs font-semibold rounded-md">
+                    {missingInfo.length} New
+                  </span>
+                </div>
+                <div className="p-0">
+                  {missingInfo.length === 0 ? (
+                    <div className="p-6 text-center">
+                      <p className="text-sm text-gray-500">No missing info reported yet.</p>
+                    </div>
+                  ) : (
+                    <ul className="divide-y divide-gray-100">
+                      {missingInfo.slice(0, 5).map(info => (
+                        <li key={info.uuid} className="p-4 hover:bg-gray-50 transition-colors">
+                          <p className="text-sm font-medium text-gray-900 line-clamp-2">"{info.question}"</p>
+                          <div className="flex items-center justify-between mt-2">
+                            <span className="text-xs text-gray-500">{new Date(info.created_at).toLocaleDateString()}</span>
+                            <button className="text-xs font-medium text-blue-600 hover:text-blue-700">Add Answer</button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {missingInfo.length > 5 && (
+                    <div className="p-3 border-t border-gray-100 text-center">
+                      <button className="text-sm font-medium text-blue-600 hover:text-blue-700">View All</button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

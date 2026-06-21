@@ -16,3 +16,12 @@ class AgentUpdateRequest(BaseModel):
     persona: str | None = None
     system_prompt: str | None = None
     is_active: bool | None = None
+
+
+class MissingInfoResponse(BaseModel):
+    uuid: str
+    question: str
+    status: str
+    created_at: str
+
+    model_config = {"from_attributes": True}

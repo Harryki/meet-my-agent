@@ -63,6 +63,7 @@ export default function ProfilePage() {
   }
 
   const [history, setHistory] = useState([])
+  const [missingInfo, setMissingInfo] = useState([])
 
   useEffect(() => {
     if (!agent_id) return
@@ -98,6 +99,22 @@ export default function ProfilePage() {
     }
     fetchHistory()
   }, [user, agent_id])
+
+  useEffect(() => {
+    if (!isOwner || !agent_id) return
+    const fetchMissingInfo = async () => {
+      try {
+        const res = await apiRequest(`/v1/agents/${agent_id}/missing-info`)
+        if (res.ok) {
+          const data = await res.json()
+          setMissingInfo(data)
+        }
+      } catch (err) {
+        console.error('Failed to load missing info', err)
+      }
+    }
+    fetchMissingInfo()
+  }, [isOwner, agent_id])
 
   const handleLogout = () => {
     logout()
@@ -302,6 +319,32 @@ export default function ProfilePage() {
 
             {/* Right column */}
             <div className="flex-1 space-y-6">
+              
+              {/* Unanswered Questions Alert */}
+              {isOwner && missingInfo.length > 0 && (
+                <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm sm:p-8">
+                  <h2 className="text-lg font-bold text-amber-900 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    Unanswered Questions ({missingInfo.length})
+                  </h2>
+                  <p className="mt-2 text-sm text-amber-800">Your AI could not answer the following questions. Provide answers to improve your agent.</p>
+                  <ul className="mt-4 space-y-3">
+                    {missingInfo.slice(0, 3).map(info => (
+                      <li key={info.uuid} className="bg-white/60 p-3 rounded-lg border border-amber-100 text-sm text-gray-800">
+                        "{info.question}"
+                      </li>
+                    ))}
+                  </ul>
+                  {missingInfo.length > 3 && (
+                    <Link href="/provider" className="mt-4 inline-block text-sm font-medium text-amber-700 hover:text-amber-800 underline">
+                      View all in Provider Dashboard
+                    </Link>
+                  )}
+                </section>
+              )}
+
               {/* What to expect */}
               <section className="rounded-2xl bg-white p-6 shadow-sm sm:p-8">
                 <div className="flex items-center justify-between">
